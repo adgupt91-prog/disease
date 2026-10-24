@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daily Symptom Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout: single phone-first column — date header, symptom tiles with nested choices, save bar, recent-days log */
+:root{
+  --bg:#eef2f1; --surface:#ffffff; --ink:#15211f; --muted:#5d6e6a; --line:#d5dfdc;
+  --accent:#1d6b74; --accent-soft:#dcecec; --accent-ink:#ffffff;
+  --ok:#2c7a4b; --warn:#b4542f;
+  --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body:"Figtree", "Segoe UI", system-ui, sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0f1716;--surface:#18221f;--ink:#e3ece9;--muted:#93a6a1;--line:#2a3834;
+    --accent:#5fb6bf;--accent-soft:#1d3335;--accent-ink:#0b1413;--ok:#6cc392;--warn:#e98b66;color-scheme:dark}
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:24px 120px}
+main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+h1{font:700 1.75rem/1.15 var(--display);margin:0;letter-spacing:-.01em;text-wrap:balance}
+.eyebrow{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.datebox{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
+.datebox input{border:0;background:transparent;color:var(--ink);font:600 1.15rem var(--display);
+  font-variant-numeric:tabular-nums;width:100%;padding:0}
+.lock{font-size:.75rem;color:var(--muted);white-space:nowrap}
+
+.sym{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;transition:border-color .15s}
+.sym.on{border-color:var(--accent)}
+.sym>label{display:flex;align-items:center;gap:14px;padding:16px;cursor:pointer;user-select:none}
+.sym input[type=checkbox].main{appearance:none;width:24px;height:24px;flex:none;border:2px solid var(--line);
+  border-radius:7px;display:grid;place-content:center;margin:0;background:var(--surface)}
+.sym input.main:checked{background:var(--accent);border-color:var(--accent)}
+.sym input.main:checked::after{content:"";width:6px;height:11px;border:solid var(--accent-ink);
+  border-width:0 2.5px 2.5px 0;transform:rotate(45deg) translate(-1px,-1px)}
+.sym input.main:focus-visible{outline:3px solid var(--accent-soft);outline-offset:2px}
+.sym .name{font-weight:600;font-size:1.05rem}
+.sym .hint{font-size:.85rem;color:var(--muted)}
+.subs{display:flex;flex-wrap:wrap;gap:8px;padding:0 16px 16px 54px}
+.chip{position:relative}
+.chip input{position:absolute;opacity:0;inset:0;margin:0}
+.chip span{display:inline-block;padding:8px 14px;border-radius:999px;border:1px solid var(--line);
+  font-size:.92rem;cursor:pointer;background:var(--bg)}
+.chip input:checked+span{background:var(--accent-soft);border-color:var(--accent);color:var(--ink);font-weight:600}
+.chip input:focus-visible+span{outline:3px solid var(--accent-soft);outline-offset:2px}
+
+textarea{width:100%;min-height:72px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;
+  font:inherit;background:var(--surface);color:var(--ink);resize:vertical}
+textarea:focus{outline:2px solid var(--accent);outline-offset:0}
+
+.bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);
+  padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.bar-in{max-width:560px;margin:0 auto;display:flex;gap:12px;align-items:center}
+.summary{flex:1;min-width:0;font-size:.85rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button{font:600 1rem var(--body);border:0;border-radius:10px;padding:12px 22px;cursor:pointer;
+  background:var(--accent);color:var(--accent-ink)}
+button:disabled{opacity:.55;cursor:wait}
+button:focus-visible{outline:3px solid var(--accent-soft);outline-offset:2px}
+
+.status{font-size:.9rem;padding:10px 14px;border-radius:10px;background:var(--accent-soft)}
+.status.err{color:var(--warn)} .status.ok{color:var(--ok)}
+
+h2{font:600 1.1rem var(--display);margin:8px 0 0}
+.log{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
+.row{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:12px 16px;border-top:1px solid var(--line)}
+.row:first-child{border-top:0}
+.row .d{font-variant-numeric:tabular-nums;font-weight:600;font-size:.9rem}
+.tags{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+.tag{font-size:.8rem;padding:2px 9px;border-radius:999px;background:var(--accent-soft)}
+.tag.none{background:transparent;color:var(--ok);padding-left:0}
+.empty{padding:16px;color:var(--muted);font-size:.92rem}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="eyebrow">Daily Symptom Log</div>
+    <h1>How did your body feel today?</h1>
+  </header>
+
+  <div class="datebox">
+    <input id="date" type="text" readonly aria-label="Today's date" tabindex="-1">
+    <span class="lock">🔒 Fixed to today</span>
+  </div>
+
+  <form id="form" autocomplete="off">
+    <div style="display:flex;flex-direction:column;gap:12px">
+
+      <div class="sym" data-key="headache">
+        <label><input type="checkbox" class="main" id="headache">
+          <div><div class="name">Headache</div><div class="hint">Pick the type below</div></div></label>
+        <div class="subs" hidden>
+          <label class="chip"><input type="checkbox" name="headacheType" value="Migraine"><span>Migraine</span></label>
+          <label class="chip"><input type="checkbox" name="headacheType" value="Full head"><span>Full head</span></label>
+        </div>
+      </div>
+
+      <div class="sym" data-key="neck">
+        <label><input type="checkbox" class="main" id="neck">
+          <div><div class="name">Cervical neck pain</div></div></label>
+      </div>
+
+      <div class="sym" data-key="stomach">
+        <label><input type="checkbox" class="main" id="stomach">
+          <div><div class="name">Stomach upset</div><div class="hint">Select all that apply</div></div></label>
+        <div class="subs" hidden>
+          <label class="chip"><input type="checkbox" name="stomachSymptoms" value="Too many farts"><span>Too many farts</span></label>
+          <label class="chip"><input type="checkbox" name="stomachSymptoms" value="Incomplete evacuation"><span>Incomplete evacuation of bowel</span></label>
+          <label class="chip"><input type="checkbox" name="stomachSymptoms" value="Vomit"><span>Vomit</span></label>
+          <label class="chip"><input type="checkbox" name="stomachSymptoms" value="Bloating"><span>Bloating</span></label>
+        </div>
+      </div>
+
+      <div class="sym" data-key="back">
+        <label><input type="checkbox" class="main" id="back">
+          <div><div class="name">Low back pain</div></div></label>
+      </div>
+
+      <label for="notes" class="eyebrow" style="margin-top:8px">Notes (optional)</label>
+      <textarea id="notes" placeholder="Food, sleep, medicine taken, triggers…"></textarea>
+    </div>
+  </form>
+
+  <div id="status" class="status" hidden></div>
+
+  <section>
+    <h2>Last 30 days</h2>
+    <div id="log" class="log" style="margin-top:10px"><div class="empty">Loading saved entries…</div></div>
+  </section>
+</main>
+
+<div class="bar"><div class="bar-in">
+  <div class="summary" id="summary">No symptoms selected — saves as a symptom-free day</div>
+  <button id="save" type="button">Save today</button>
+</div></div>
+
+<script>
+// Paste your Apps Script Web App /exec URL here
+const SCRIPT_URL = 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE';
+
+const $ = s => document.querySelector(s);
+const keys = ['headache','neck','stomach','back'];
+const labels = {headache:'Headache', neck:'Neck pain', stomach:'Stomach upset', back:'Low back pain'};
+
+function todayIST(){
+  const p = new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',day:'2-digit',month:'2-digit',year:'numeric'}).formatToParts(new Date());
+  const g = t => p.find(x=>x.type===t).value;
+  return `${g('day')}-${g('month')}-${g('year')}`;
+}
+function longDate(){
+  return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
+}
+$('#date').value = longDate();
+
+// Show/hide sub-options with the main checkbox
+document.querySelectorAll('.sym').forEach(card=>{
+  const main = card.querySelector('.main'), subs = card.querySelector('.subs');
+  main.addEventListener('change',()=>{
+    card.classList.toggle('on', main.checked);
+    if (subs){ subs.hidden = !main.checked; if(!main.checked) subs.querySelectorAll('input').forEach(i=>i.checked=false); }
+    updateSummary();
+  });
+  if (subs) subs.addEventListener('change', updateSummary);
+});
+
+const vals = n => [...document.querySelectorAll(`input[name="${n}"]:checked`)].map(i=>i.value);
+
+function collect(){
+  return {
+    headache: $('#headache').checked, headacheType: vals('headacheType'),
+    neck: $('#neck').checked,
+    stomach: $('#stomach').checked, stomachSymptoms: vals('stomachSymptoms'),
+    back: $('#back').checked,
+    notes: $('#notes').value.trim()
+  };
+}
+function updateSummary(){
+  const on = keys.filter(k=>$('#'+k).checked).map(k=>labels[k]);
+  $('#summary').textContent = on.length ? `${on.length} selected: ${on.join(', ')}` : 'No symptoms selected — saves as a symptom-free day';
+}
+function showStatus(msg, kind){
+  const s = $('#status'); s.hidden = false; s.className = 'status ' + (kind||''); s.textContent = msg;
+}
+
+function fill(e){
+  const set = (id,v)=>{ const el=$('#'+id); el.checked = v==='Yes'; el.dispatchEvent(new Event('change')); };
+  set('headache', e.headache); set('neck', e.neck); set('stomach', e.stomach); set('back', e.back);
+  const tick = (name, str)=>{ const list=(str||'').split(',').map(s=>s.trim());
+    document.querySelectorAll(`input[name="${name}"]`).forEach(i=>i.checked = list.includes(i.value)); };
+  tick('headacheType', e.headacheType); tick('stomachSymptoms', e.stomachSymptoms);
+  $('#notes').value = e.notes || '';
+  $('#save').textContent = 'Update today';
+  updateSummary();
+}
+
+function renderLog(entries){
+  const log = $('#log');
+  if (!entries.length){ log.innerHTML = '<div class="empty">No entries yet. Today\'s will be the first.</div>'; return; }
+  log.innerHTML = '';
+  entries.forEach(e=>{
+    const tags = [];
+    if (e.headache==='Yes') tags.push('Headache' + (e.headacheType?` · ${e.headacheType}`:''));
+    if (e.neck==='Yes') tags.push('Neck pain');
+    if (e.stomach==='Yes') tags.push('Stomach' + (e.stomachSymptoms?` · ${e.stomachSymptoms}`:''));
+    if (e.back==='Yes') tags.push('Low back pain');
+    const row = document.createElement('div'); row.className='row';
+    const d = document.createElement('div'); d.className='d'; d.textContent = e.date;
+    const t = document.createElement('div'); t.className='tags';
+    if (!tags.length){ const s=document.createElement('span'); s.className='tag none'; s.textContent='Symptom-free'; t.append(s); }
+    tags.forEach(x=>{ const s=document.createElement('span'); s.className='tag'; s.textContent=x; t.append(s); });
+    row.append(d,t); log.append(row);
+  });
+}
+
+async function load(){
+  if (SCRIPT_URL.startsWith('PASTE')){ $('#log').innerHTML='<div class="empty">Add your Apps Script URL in the code to load entries.</div>'; return; }
+  try{
+    const r = await fetch(SCRIPT_URL); const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    renderLog(j.entries);
+    if (j.todayEntry){ fill(j.todayEntry); showStatus('Today is already saved. Change anything and tap Update.', 'ok'); }
+  }catch(err){ $('#log').innerHTML = '<div class="empty">Could not load entries. Check your internet connection and the script URL.</div>'; }
+}
+
+$('#save').addEventListener('click', async ()=>{
+  const d = collect();
+  if (d.headache && !d.headacheType.length) return showStatus('Pick the headache type: Migraine or Full head.', 'err');
+  if (d.stomach && !d.stomachSymptoms.length) return showStatus('Pick at least one stomach symptom.', 'err');
+  if (SCRIPT_URL.startsWith('PASTE')) return showStatus('Add your Apps Script Web App URL in index.html first.', 'err');
+  const btn = $('#save'); btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    const r = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(d)});
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    showStatus(j.updated ? `Updated entry for ${j.date}.` : `Saved entry for ${j.date}.`, 'ok');
+    btn.textContent = 'Update today';
+    load();
+  }catch(err){
+    showStatus('Not saved. Check your connection and try again.', 'err');
+    btn.textContent = 'Save today';
+  }finally{ btn.disabled = false; }
+});
+
+updateSummary();
+load();
+</script>
+</body>
+</html>
