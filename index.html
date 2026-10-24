@@ -7,28 +7,39 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Figtree:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
-/* Layout: single phone-first column — date header, symptom tiles with nested choices, save bar, recent-days log */
+/* Layout: single phone-first column — tab switch (Log / Report), symptom tiles with nested choices, fixed save bar; report = range chips, stat tiles, charts */
 :root{
   --bg:#eef2f1; --surface:#ffffff; --ink:#15211f; --muted:#5d6e6a; --line:#d5dfdc;
   --accent:#1d6b74; --accent-soft:#dcecec; --accent-ink:#ffffff;
   --ok:#2c7a4b; --warn:#b4542f;
+  --c1:#1d6b74; --c2:#c26a3d; --c3:#6b5fa8; --c4:#b8912a; --c5:#3f8f5f;
   --display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
   --body:"Figtree", "Segoe UI", system-ui, sans-serif;
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
   :root{--bg:#0f1716;--surface:#18221f;--ink:#e3ece9;--muted:#93a6a1;--line:#2a3834;
-    --accent:#5fb6bf;--accent-soft:#1d3335;--accent-ink:#0b1413;--ok:#6cc392;--warn:#e98b66;color-scheme:dark}
+    --accent:#5fb6bf;--accent-soft:#1d3335;--accent-ink:#0b1413;--ok:#6cc392;--warn:#e98b66;
+    --c1:#5fb6bf;--c2:#e5915f;--c3:#a397e0;--c4:#dcb84f;--c5:#6cc392;color-scheme:dark}
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important}
 html,body{margin:0}
 body{background:var(--bg);color:var(--ink);font:16px/1.5 var(--body);
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
   padding-block:24px 120px}
-main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+body.report-mode{padding-bottom:40px}
+main{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
 h1{font:700 1.75rem/1.15 var(--display);margin:0;letter-spacing:-.01em;text-wrap:balance}
 .eyebrow{font-size:.75rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600}
+.top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+
+.tabs{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.tabs button{background:transparent;color:var(--muted);padding:8px 16px;font-size:.92rem;border-radius:7px}
+.tabs button[aria-selected="true"]{background:var(--accent);color:var(--accent-ink)}
+
 .datebox{display:flex;align-items:center;justify-content:space-between;gap:12px;
   background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 16px}
 .datebox input{border:0;background:transparent;color:var(--ink);font:600 1.15rem var(--display);
@@ -60,17 +71,19 @@ textarea:focus{outline:2px solid var(--accent);outline-offset:0}
 
 .bar{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);
   padding:12px max(16px,env(safe-area-inset-right,0px)) calc(12px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
-.bar-in{max-width:560px;margin:0 auto;display:flex;gap:12px;align-items:center}
+.bar-in{max-width:640px;margin:0 auto;display:flex;gap:12px;align-items:center}
 .summary{flex:1;min-width:0;font-size:.85rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 button{font:600 1rem var(--body);border:0;border-radius:10px;padding:12px 22px;cursor:pointer;
   background:var(--accent);color:var(--accent-ink)}
+button.danger{background:var(--warn);color:#fff}
+button.ghost{background:transparent;color:var(--muted);padding:12px 10px}
 button:disabled{opacity:.55;cursor:wait}
 button:focus-visible{outline:3px solid var(--accent-soft);outline-offset:2px}
 
 .status{font-size:.9rem;padding:10px 14px;border-radius:10px;background:var(--accent-soft)}
 .status.err{color:var(--warn)} .status.ok{color:var(--ok)}
 
-h2{font:600 1.1rem var(--display);margin:8px 0 0}
+h2{font:600 1.1rem var(--display);margin:0}
 .log{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:12px;background:var(--surface);overflow:hidden}
 .row{display:grid;grid-template-columns:92px 1fr;gap:12px;padding:12px 16px;border-top:1px solid var(--line)}
 .row:first-child{border-top:0}
@@ -79,24 +92,54 @@ h2{font:600 1.1rem var(--display);margin:8px 0 0}
 .tag{font-size:.8rem;padding:2px 9px;border-radius:999px;background:var(--accent-soft)}
 .tag.none{background:transparent;color:var(--ok);padding-left:0}
 .empty{padding:16px;color:var(--muted);font-size:.92rem}
+
+/* Report */
+.ranges{display:flex;flex-wrap:wrap;gap:8px}
+.ranges button{background:var(--surface);color:var(--ink);border:1px solid var(--line);padding:8px 14px;font-size:.9rem;border-radius:999px}
+.ranges button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,1fr)}}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px 14px;min-width:0}
+.stat .v{font:700 1.6rem/1.1 var(--display);font-variant-numeric:tabular-nums}
+.stat .l{font-size:.78rem;color:var(--muted);margin-top:4px}
+.stat .v.small{font-size:1.05rem;line-height:1.3;padding-top:6px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.card p{margin:0;font-size:.85rem;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:560px){.grid2{grid-template-columns:1fr}}
+.chartbox{position:relative;height:240px}
+.chartbox.tall{height:280px}
+.scroll{overflow-x:auto}
+.heat{border-collapse:collapse;font-size:.75rem;font-variant-numeric:tabular-nums}
+.heat th{font-weight:600;color:var(--muted);padding:2px 4px;text-align:left;white-space:nowrap}
+.heat td{width:18px;height:18px;padding:0;border:2px solid var(--surface);border-radius:4px}
+.heat td.y{background:var(--warn)} .heat td.n{background:var(--accent-soft)} .heat td.x{background:transparent;outline:1px dashed var(--line);outline-offset:-3px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.78rem;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 </head>
 <body>
 <main>
-  <header>
-    <div class="eyebrow">Daily Symptom Log</div>
-    <h1>How did your body feel today?</h1>
+  <header class="top">
+    <div>
+      <div class="eyebrow">Daily Symptom Log</div>
+      <h1 id="heading">How did your body feel today?</h1>
+    </div>
   </header>
-
-  <div class="datebox">
-    <input id="date" type="text" readonly aria-label="Today's date" tabindex="-1">
-    <span class="lock">🔒 Fixed to today</span>
+  <div class="tabs" role="tablist">
+    <button id="tabLog" role="tab" aria-selected="true">Log today</button>
+    <button id="tabReport" role="tab" aria-selected="false">📊 Report</button>
   </div>
 
-  <form id="form" autocomplete="off">
-    <div style="display:flex;flex-direction:column;gap:12px">
+  <!-- LOG VIEW -->
+  <section id="viewLog" style="display:flex;flex-direction:column;gap:20px">
+    <div class="datebox">
+      <input id="date" type="text" readonly aria-label="Today's date" tabindex="-1">
+      <span class="lock">🔒 Fixed to today</span>
+    </div>
 
+    <form id="form" autocomplete="off" style="display:flex;flex-direction:column;gap:12px">
       <div class="sym" data-key="headache">
         <label><input type="checkbox" class="main" id="headache">
           <div><div class="name">Headache</div><div class="hint">Pick the type below</div></div></label>
@@ -105,12 +148,10 @@ h2{font:600 1.1rem var(--display);margin:8px 0 0}
           <label class="chip"><input type="checkbox" name="headacheType" value="Full head"><span>Full head</span></label>
         </div>
       </div>
-
       <div class="sym" data-key="neck">
         <label><input type="checkbox" class="main" id="neck">
           <div><div class="name">Cervical neck pain</div></div></label>
       </div>
-
       <div class="sym" data-key="stomach">
         <label><input type="checkbox" class="main" id="stomach">
           <div><div class="name">Stomach upset</div><div class="hint">Select all that apply</div></div></label>
@@ -121,27 +162,87 @@ h2{font:600 1.1rem var(--display);margin:8px 0 0}
           <label class="chip"><input type="checkbox" name="stomachSymptoms" value="Bloating"><span>Bloating</span></label>
         </div>
       </div>
-
       <div class="sym" data-key="back">
         <label><input type="checkbox" class="main" id="back">
           <div><div class="name">Low back pain</div></div></label>
       </div>
-
       <label for="notes" class="eyebrow" style="margin-top:8px">Notes (optional)</label>
       <textarea id="notes" placeholder="Food, sleep, medicine taken, triggers…"></textarea>
+    </form>
+
+    <div id="status" class="status" hidden></div>
+
+    <div style="display:flex;flex-direction:column;gap:10px">
+      <h2>Recent days</h2>
+      <div id="log" class="log"><div class="empty">Loading saved entries…</div></div>
     </div>
-  </form>
+  </section>
 
-  <div id="status" class="status" hidden></div>
+  <!-- REPORT VIEW -->
+  <section id="viewReport" hidden style="display:flex;flex-direction:column;gap:16px">
+    <div class="ranges" id="ranges">
+      <button data-days="7">7 days</button>
+      <button data-days="15">15 days</button>
+      <button data-days="30" aria-pressed="true">30 days</button>
+      <button data-days="90">90 days</button>
+      <button data-days="all">All time</button>
+    </div>
+    <div id="rStatus" class="status" hidden></div>
 
-  <section>
-    <h2>Last 30 days</h2>
-    <div id="log" class="log" style="margin-top:10px"><div class="empty">Loading saved entries…</div></div>
+    <div class="stats">
+      <div class="stat"><div class="v" id="sLogged">–</div><div class="l">Days logged</div></div>
+      <div class="stat"><div class="v" id="sFree">–</div><div class="l">Symptom-free days</div></div>
+      <div class="stat"><div class="v" id="sMissed">–</div><div class="l">Days not logged</div></div>
+      <div class="stat"><div class="v small" id="sTop">–</div><div class="l">Most frequent</div></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Share of symptoms</h2>
+        <p>Each symptom's part of all symptom-days.</p>
+        <div class="chartbox"><canvas id="cPie"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Days with each symptom</h2>
+        <p>Out of the days you logged.</p>
+        <div class="chartbox"><canvas id="cBar"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Day by day</h2>
+      <p>Number of symptoms on each day. Empty gaps are days with no entry.</p>
+      <div class="chartbox tall"><canvas id="cTimeline"></canvas></div>
+    </div>
+
+    <div class="card">
+      <h2>Symptom calendar</h2>
+      <div class="legend"><span><i style="background:var(--warn)"></i>Had it</span><span><i style="background:var(--accent-soft)"></i>Didn't</span><span><i style="outline:1px dashed var(--line)"></i>Not logged</span></div>
+      <div class="scroll"><table class="heat" id="heat"></table></div>
+    </div>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Headache type</h2>
+        <div class="chartbox"><canvas id="cHead"></canvas></div>
+      </div>
+      <div class="card">
+        <h2>Stomach symptoms</h2>
+        <div class="chartbox"><canvas id="cStomach"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>By weekday</h2>
+      <p>Average number of symptoms on each day of the week.</p>
+      <div class="chartbox"><canvas id="cWeek"></canvas></div>
+    </div>
   </section>
 </main>
 
-<div class="bar"><div class="bar-in">
+<div class="bar" id="saveBar"><div class="bar-in">
   <div class="summary" id="summary">No symptoms selected — saves as a symptom-free day</div>
+  <button id="cancel" type="button" class="ghost" hidden>Cancel</button>
   <button id="save" type="button">Save today</button>
 </div></div>
 
@@ -152,30 +253,50 @@ const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxmEj4A8nL6CuhpYjMs5
 const $ = s => document.querySelector(s);
 const keys = ['headache','neck','stomach','back'];
 const labels = {headache:'Headache', neck:'Neck pain', stomach:'Stomach upset', back:'Low back pain'};
+const HEAD_TYPES = ['Migraine','Full head'];
+const STOM_TYPES = ['Too many farts','Incomplete evacuation','Vomit','Bloating'];
+let savedToday = false;   // true once today's row exists in the sheet
+let armed = false;        // true after first tap when overwriting
 
-function todayIST(){
-  const p = new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',day:'2-digit',month:'2-digit',year:'numeric'}).formatToParts(new Date());
+/* ---------- Dates (IST) ---------- */
+function istParts(d){
+  const p = new Intl.DateTimeFormat('en-GB',{timeZone:'Asia/Kolkata',day:'2-digit',month:'2-digit',year:'numeric'}).formatToParts(d);
   const g = t => p.find(x=>x.type===t).value;
-  return `${g('day')}-${g('month')}-${g('year')}`;
+  return {d:+g('day'), m:+g('month'), y:+g('year')};
 }
-function longDate(){
-  return new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
-}
-$('#date').value = longDate();
+const todayKey = () => { const t = istParts(new Date()); return Date.UTC(t.y,t.m-1,t.d); };
+const parseKey = s => { const [d,m,y] = s.split('-').map(Number); return Date.UTC(y,m-1,d); };
+const fmtKey = k => { const d = new Date(k); return `${String(d.getUTCDate()).padStart(2,'0')}-${String(d.getUTCMonth()+1).padStart(2,'0')}-${d.getUTCFullYear()}`; };
+const shortKey = k => new Date(k).toLocaleDateString('en-IN',{day:'numeric',month:'short',timeZone:'UTC'});
+const DAY = 86400000;
+$('#date').value = new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
 
-// Show/hide sub-options with the main checkbox
+/* ---------- Tabs ---------- */
+function showTab(report){
+  $('#tabLog').setAttribute('aria-selected', !report);
+  $('#tabReport').setAttribute('aria-selected', report);
+  $('#viewLog').hidden = report; $('#viewReport').hidden = !report;
+  $('#saveBar').hidden = report;
+  document.body.classList.toggle('report-mode', report);
+  $('#heading').textContent = report ? 'How has your body been doing?' : 'How did your body feel today?';
+  if (report) loadReport();
+}
+$('#tabLog').onclick = () => showTab(false);
+$('#tabReport').onclick = () => showTab(true);
+
+/* ---------- Log form ---------- */
 document.querySelectorAll('.sym').forEach(card=>{
   const main = card.querySelector('.main'), subs = card.querySelector('.subs');
   main.addEventListener('change',()=>{
     card.classList.toggle('on', main.checked);
     if (subs){ subs.hidden = !main.checked; if(!main.checked) subs.querySelectorAll('input').forEach(i=>i.checked=false); }
-    updateSummary();
+    updateSummary(); disarm();
   });
-  if (subs) subs.addEventListener('change', updateSummary);
+  if (subs) subs.addEventListener('change', ()=>{ updateSummary(); disarm(); });
 });
+$('#notes').addEventListener('input', disarm);
 
 const vals = n => [...document.querySelectorAll(`input[name="${n}"]:checked`)].map(i=>i.value);
-
 function collect(){
   return {
     headache: $('#headache').checked, headacheType: vals('headacheType'),
@@ -189,9 +310,16 @@ function updateSummary(){
   const on = keys.filter(k=>$('#'+k).checked).map(k=>labels[k]);
   $('#summary').textContent = on.length ? `${on.length} selected: ${on.join(', ')}` : 'No symptoms selected — saves as a symptom-free day';
 }
-function showStatus(msg, kind){
-  const s = $('#status'); s.hidden = false; s.className = 'status ' + (kind||''); s.textContent = msg;
+function showStatus(msg, kind, el='#status'){
+  const s = $(el); s.hidden = false; s.className = 'status ' + (kind||''); s.textContent = msg;
 }
+function setButton(){
+  const b = $('#save');
+  if (armed){ b.textContent = 'Yes, overwrite'; b.classList.add('danger'); $('#cancel').hidden = false; }
+  else { b.textContent = savedToday ? 'Update today' : 'Save today'; b.classList.remove('danger'); $('#cancel').hidden = true; }
+}
+function disarm(){ if (armed){ armed = false; setButton(); } }
+$('#cancel').onclick = () => { armed = false; setButton(); showStatus("Not overwritten. Today's saved entry is unchanged.", 'ok'); };
 
 function fill(e){
   const set = (id,v)=>{ const el=$('#'+id); el.checked = v==='Yes'; el.dispatchEvent(new Event('change')); };
@@ -200,20 +328,23 @@ function fill(e){
     document.querySelectorAll(`input[name="${name}"]`).forEach(i=>i.checked = list.includes(i.value)); };
   tick('headacheType', e.headacheType); tick('stomachSymptoms', e.stomachSymptoms);
   $('#notes').value = e.notes || '';
-  $('#save').textContent = 'Update today';
   updateSummary();
 }
 
+function tagsFor(e){
+  const tags = [];
+  if (e.headache==='Yes') tags.push('Headache' + (e.headacheType?` · ${e.headacheType}`:''));
+  if (e.neck==='Yes') tags.push('Neck pain');
+  if (e.stomach==='Yes') tags.push('Stomach' + (e.stomachSymptoms?` · ${e.stomachSymptoms}`:''));
+  if (e.back==='Yes') tags.push('Low back pain');
+  return tags;
+}
 function renderLog(entries){
   const log = $('#log');
   if (!entries.length){ log.innerHTML = '<div class="empty">No entries yet. Today\'s will be the first.</div>'; return; }
   log.innerHTML = '';
-  entries.forEach(e=>{
-    const tags = [];
-    if (e.headache==='Yes') tags.push('Headache' + (e.headacheType?` · ${e.headacheType}`:''));
-    if (e.neck==='Yes') tags.push('Neck pain');
-    if (e.stomach==='Yes') tags.push('Stomach' + (e.stomachSymptoms?` · ${e.stomachSymptoms}`:''));
-    if (e.back==='Yes') tags.push('Low back pain');
+  entries.slice(0,10).forEach(e=>{
+    const tags = tagsFor(e);
     const row = document.createElement('div'); row.className='row';
     const d = document.createElement('div'); d.className='d'; d.textContent = e.date;
     const t = document.createElement('div'); t.className='tags';
@@ -223,13 +354,18 @@ function renderLog(entries){
   });
 }
 
+const notConfigured = () => SCRIPT_URL.startsWith('PASTE');
+
 async function load(){
-  if (SCRIPT_URL.startsWith('PASTE')){ $('#log').innerHTML='<div class="empty">Add your Apps Script URL in the code to load entries.</div>'; return; }
+  if (notConfigured()){ $('#log').innerHTML='<div class="empty">Add your Apps Script URL in the code to load entries.</div>'; return; }
   try{
-    const r = await fetch(SCRIPT_URL); const j = await r.json();
+    const r = await fetch(SCRIPT_URL + '?limit=10'); const j = await r.json();
     if (!j.ok) throw new Error(j.error);
     renderLog(j.entries);
-    if (j.todayEntry){ fill(j.todayEntry); showStatus('Today is already saved. Change anything and tap Update.', 'ok'); }
+    if (j.todayEntry){
+      savedToday = true; fill(j.todayEntry); armed = false; setButton();
+      showStatus("Today is already saved. Saving again will overwrite it.", 'ok');
+    }
   }catch(err){ $('#log').innerHTML = '<div class="empty">Could not load entries. Check your internet connection and the script URL.</div>'; }
 }
 
@@ -237,23 +373,140 @@ $('#save').addEventListener('click', async ()=>{
   const d = collect();
   if (d.headache && !d.headacheType.length) return showStatus('Pick the headache type: Migraine or Full head.', 'err');
   if (d.stomach && !d.stomachSymptoms.length) return showStatus('Pick at least one stomach symptom.', 'err');
-  if (SCRIPT_URL.startsWith('PASTE')) return showStatus('Add your Apps Script Web App URL in index.html first.', 'err');
+  if (notConfigured()) return showStatus('Add your Apps Script Web App URL in index.html first.', 'err');
+
+  // Same day already saved → ask once before overwriting
+  if (savedToday && !armed){
+    armed = true; setButton();
+    return showStatus("Today's entry already exists. Tap \"Yes, overwrite\" to replace it with these answers.", 'err');
+  }
+
   const btn = $('#save'); btn.disabled = true; btn.textContent = 'Saving…';
   try{
     const r = await fetch(SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body: JSON.stringify(d)});
     const j = await r.json();
     if (!j.ok) throw new Error(j.error);
-    showStatus(j.updated ? `Updated entry for ${j.date}.` : `Saved entry for ${j.date}.`, 'ok');
-    btn.textContent = 'Update today';
+    showStatus(j.updated ? `Overwrote the entry for ${j.date}.` : `Saved entry for ${j.date}.`, 'ok');
+    savedToday = true; armed = false; reportCache = null;
     load();
   }catch(err){
     showStatus('Not saved. Check your connection and try again.', 'err');
-    btn.textContent = 'Save today';
-  }finally{ btn.disabled = false; }
+  }finally{ btn.disabled = false; setButton(); }
 });
 
-updateSummary();
-load();
+/* ---------- Report ---------- */
+let reportCache = null, range = '30', charts = {};
+document.querySelectorAll('#ranges button').forEach(b=>b.onclick = ()=>{
+  document.querySelectorAll('#ranges button').forEach(x=>x.setAttribute('aria-pressed', x===b));
+  range = b.dataset.days; renderReport();
+});
+
+async function loadReport(){
+  if (reportCache) return renderReport();
+  if (notConfigured()) return showStatus('Add your Apps Script Web App URL in index.html to see the report.', 'err', '#rStatus');
+  showStatus('Loading your data…', '', '#rStatus');
+  try{
+    const r = await fetch(SCRIPT_URL + '?limit=all'); const j = await r.json();
+    if (!j.ok) throw new Error(j.error);
+    reportCache = j.entries.map(e=>({...e, key: parseKey(e.date)}));
+    $('#rStatus').hidden = true;
+    renderReport();
+  }catch(err){ showStatus('Could not load data. Check your connection and try again.', 'err', '#rStatus'); }
+}
+
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function chart(id, cfg){
+  if (charts[id]) charts[id].destroy();
+  Chart.defaults.color = css('--muted'); Chart.defaults.font.family = css('--body');
+  Chart.defaults.borderColor = css('--line');
+  charts[id] = new Chart(document.getElementById(id), cfg);
+}
+
+function renderReport(){
+  if (!reportCache) return;
+  const end = todayKey();
+  const first = reportCache.length ? Math.min(...reportCache.map(e=>e.key)) : end;
+  const start = range === 'all' ? first : end - (Number(range)-1)*DAY;
+  const totalDays = Math.round((end - start)/DAY) + 1;
+  const byKey = new Map(reportCache.filter(e=>e.key>=start && e.key<=end).map(e=>[e.key,e]));
+  const rows = [...byKey.values()];
+
+  const has = (e,k) => e[k]==='Yes';
+  const counts = keys.map(k => rows.filter(e=>has(e,k)).length);
+  const free = rows.filter(e=>keys.every(k=>!has(e,k))).length;
+  const maxI = counts.indexOf(Math.max(...counts));
+
+  $('#sLogged').textContent = rows.length;
+  $('#sFree').textContent = free;
+  $('#sMissed').textContent = Math.max(0, totalDays - rows.length);
+  $('#sTop').textContent = counts[maxI] > 0 ? `${labels[keys[maxI]]} (${counts[maxI]})` : 'None';
+
+  const colors = ['--c1','--c2','--c3','--c4'].map(css);
+  const noData = !rows.length;
+  if (noData) showStatus('No entries in this period yet.', '', '#rStatus'); else $('#rStatus').hidden = true;
+
+  // Pie: share of symptom occurrences (+ symptom-free days)
+  chart('cPie', { type:'doughnut',
+    data:{ labels:[...keys.map(k=>labels[k]), 'Symptom-free'],
+      datasets:[{ data:[...counts, free], backgroundColor:[...colors, css('--c5')], borderColor:css('--surface'), borderWidth:2 }] },
+    options:{ maintainAspectRatio:false, cutout:'55%', plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10, padding:10 } },
+      tooltip:{ callbacks:{ label:c=>{ const t=c.dataset.data.reduce((a,b)=>a+b,0)||1; return ` ${c.label}: ${c.raw} (${Math.round(c.raw/t*100)}%)`; } } } } }
+  });
+
+  // Bar: days per symptom (% of logged days)
+  chart('cBar', { type:'bar',
+    data:{ labels:keys.map(k=>labels[k]), datasets:[{ data:counts, backgroundColor:colors, borderRadius:6 }] },
+    options:{ maintainAspectRatio:false, plugins:{ legend:{display:false},
+      tooltip:{ callbacks:{ label:c=>` ${c.raw} of ${rows.length} days (${rows.length?Math.round(c.raw/rows.length*100):0}%)` } } },
+      scales:{ y:{ beginAtZero:true, ticks:{ precision:0 }, title:{display:true,text:'Days'} }, x:{ grid:{display:false} } } }
+  });
+
+  // Timeline: stacked bar per day
+  const days = []; for (let k=start; k<=end; k+=DAY) days.push(k);
+  chart('cTimeline', { type:'bar',
+    data:{ labels:days.map(shortKey),
+      datasets:keys.map((k,i)=>({ label:labels[k], data:days.map(d=>{ const e=byKey.get(d); return e && has(e,k) ? 1 : 0; }),
+        backgroundColor:colors[i], stack:'s', borderRadius:2 })) },
+    options:{ maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10 } },
+      tooltip:{ callbacks:{ title:c=>fmtKey(days[c[0].dataIndex]) + (byKey.has(days[c[0].dataIndex])?'':' · not logged') } } },
+      scales:{ y:{ stacked:true, beginAtZero:true, max:4, ticks:{ stepSize:1 }, title:{display:true,text:'Symptoms'} },
+        x:{ stacked:true, grid:{display:false}, ticks:{ autoSkip:true, maxRotation:0, maxTicksLimit:10 } } } }
+  });
+
+  // Calendar heat table (last up to 60 days to keep it readable)
+  const hd = days.slice(-60);
+  let html = '<tr><th></th>' + hd.map((d,i)=>`<th>${i%7===0||i===hd.length-1 ? new Date(d).getUTCDate() : ''}</th>`).join('') + '</tr>';
+  keys.forEach(k=>{
+    html += `<tr><th>${labels[k]}</th>` + hd.map(d=>{ const e=byKey.get(d); const c = !e ? 'x' : has(e,k) ? 'y' : 'n';
+      return `<td class="${c}" title="${fmtKey(d)}"></td>`; }).join('') + '</tr>';
+  });
+  $('#heat').innerHTML = html;
+
+  // Sub-type breakdowns
+  const subCount = (field, types) => types.map(t => rows.filter(e => (e[field]||'').split(',').map(s=>s.trim()).includes(t)).length);
+  chart('cHead', { type:'bar',
+    data:{ labels:HEAD_TYPES, datasets:[{ data:subCount('headacheType', HEAD_TYPES), backgroundColor:css('--c1'), borderRadius:6 }] },
+    options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ beginAtZero:true, ticks:{precision:0}, title:{display:true,text:'Days'} }, y:{ grid:{display:false} } } }
+  });
+  chart('cStomach', { type:'bar',
+    data:{ labels:['Too many farts','Incomplete evac.','Vomit','Bloating'], datasets:[{ data:subCount('stomachSymptoms', STOM_TYPES), backgroundColor:css('--c2'), borderRadius:6 }] },
+    options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ beginAtZero:true, ticks:{precision:0}, title:{display:true,text:'Days'} }, y:{ grid:{display:false} } } }
+  });
+
+  // Weekday average
+  const wd = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'], sum = Array(7).fill(0), n = Array(7).fill(0);
+  rows.forEach(e=>{ const i = (new Date(e.key).getUTCDay()+6)%7; n[i]++; sum[i] += keys.filter(k=>has(e,k)).length; });
+  chart('cWeek', { type:'bar',
+    data:{ labels:wd, datasets:[{ data:sum.map((s,i)=>n[i]?+(s/n[i]).toFixed(2):0), backgroundColor:css('--c3'), borderRadius:6 }] },
+    options:{ maintainAspectRatio:false, plugins:{ legend:{display:false},
+      tooltip:{ callbacks:{ label:c=>` ${c.raw} avg symptoms (${n[c.dataIndex]} days logged)` } } },
+      scales:{ y:{ beginAtZero:true, suggestedMax:2, title:{display:true,text:'Avg symptoms'} }, x:{ grid:{display:false} } } }
+  });
+}
+
+setButton(); updateSummary(); load();
 </script>
 </body>
 </html>
