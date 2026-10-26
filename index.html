@@ -65,6 +65,11 @@ h1{font:700 1.75rem/1.15 var(--display);margin:0;letter-spacing:-.01em;text-wrap
 .chip input:checked+span{background:var(--accent-soft);border-color:var(--accent);color:var(--ink);font-weight:600}
 .chip input:focus-visible+span{outline:3px solid var(--accent-soft);outline-offset:2px}
 
+.med{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.med .subs{padding:0}
+.med input[type=text]{width:100%;border:1px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;background:var(--bg);color:var(--ink)}
+.med input[type=text]:focus{outline:2px solid var(--accent);outline-offset:0}
+.tag.med-tag{background:transparent;border:1px solid var(--line)}
 textarea{width:100%;min-height:72px;border:1px solid var(--line);border-radius:12px;padding:12px 14px;
   font:inherit;background:var(--surface);color:var(--ink);resize:vertical}
 textarea:focus{outline:2px solid var(--accent);outline-offset:0}
@@ -166,8 +171,21 @@ h2{font:600 1.1rem var(--display);margin:0}
         <label><input type="checkbox" class="main" id="back">
           <div><div class="name">Low back pain</div></div></label>
       </div>
+      <div class="med" id="medBox">
+        <div><div class="name" style="font-weight:600;font-size:1.05rem">💊 Medicine taken today</div><div class="hint" style="font-size:.85rem;color:var(--muted)">Select all you took (optional)</div></div>
+        <div class="subs">
+          <label class="chip"><input type="checkbox" name="medicines" value="Nucoxia MR"><span>Nucoxia MR</span></label>
+          <label class="chip"><input type="checkbox" name="medicines" value="Gabapentin"><span>Gabapentin</span></label>
+          <label class="chip"><input type="checkbox" name="medicines" value="Dolo"><span>Dolo</span></label>
+          <label class="chip"><input type="checkbox" name="medicines" value="Naxdom"><span>Naxdom</span></label>
+          <label class="chip"><input type="checkbox" name="medicines" value="Mobizox"><span>Mobizox</span></label>
+          <label class="chip"><input type="checkbox" name="medicines" value="Rifagut"><span>Rifagut</span></label>
+          <label class="chip"><input type="checkbox" id="medOtherChk"><span>Others</span></label>
+        </div>
+        <input type="text" id="medOther" placeholder="Write other medicine name(s), separated by commas" maxlength="200" hidden>
+      </div>
       <label for="notes" class="eyebrow" style="margin-top:8px">Notes (optional)</label>
-      <textarea id="notes" placeholder="Food, sleep, medicine taken, triggers…"></textarea>
+      <textarea id="notes" placeholder="Food, sleep, dose, triggers…"></textarea>
     </form>
 
     <div id="status" class="status" hidden></div>
@@ -233,6 +251,12 @@ h2{font:600 1.1rem var(--display);margin:0}
     </div>
 
     <div class="card">
+      <h2>💊 Medicines taken</h2>
+      <p>Number of days each medicine was taken in this period.</p>
+      <div class="chartbox" id="medChartBox"><canvas id="cMed"></canvas></div>
+    </div>
+
+    <div class="card">
       <h2>By weekday</h2>
       <p>Average number of symptoms on each day of the week.</p>
       <div class="chartbox"><canvas id="cWeek"></canvas></div>
@@ -255,6 +279,8 @@ const keys = ['headache','neck','stomach','back'];
 const labels = {headache:'Headache', neck:'Neck pain', stomach:'Stomach upset', back:'Low back pain'};
 const HEAD_TYPES = ['Migraine','Full head'];
 const STOM_TYPES = ['Too many farts','Incomplete evacuation','Vomit','Bloating'];
+const MEDS = ['Nucoxia MR','Gabapentin','Dolo','Naxdom','Mobizox','Rifagut'];
+const splitList = str => (str||'').split(',').map(s=>s.trim()).filter(Boolean);
 let savedToday = false;   // true once today's row exists in the sheet
 let armed = false;        // true after first tap when overwriting
 
@@ -295,6 +321,20 @@ document.querySelectorAll('.sym').forEach(card=>{
   if (subs) subs.addEventListener('change', ()=>{ updateSummary(); disarm(); });
 });
 $('#notes').addEventListener('input', disarm);
+// Medicines: "Others" shows a text box
+$('#medOtherChk').addEventListener('change', ()=>{
+  const on = $('#medOtherChk').checked;
+  $('#medOther').hidden = !on;
+  if (on) $('#medOther').focus(); else $('#medOther').value = '';
+  updateSummary(); disarm();
+});
+document.querySelectorAll('input[name="medicines"]').forEach(i=>i.addEventListener('change', ()=>{ updateSummary(); disarm(); }));
+$('#medOther').addEventListener('input', disarm);
+function medicinesList(){
+  const list = vals('medicines');
+  if ($('#medOtherChk').checked) splitList($('#medOther').value.replace(/;/g, ',')).forEach(m=>{ if(!list.includes(m)) list.push(m); });
+  return list;
+}
 
 const vals = n => [...document.querySelectorAll(`input[name="${n}"]:checked`)].map(i=>i.value);
 function collect(){
@@ -303,12 +343,15 @@ function collect(){
     neck: $('#neck').checked,
     stomach: $('#stomach').checked, stomachSymptoms: vals('stomachSymptoms'),
     back: $('#back').checked,
+    medicines: medicinesList().join(', '),
     notes: $('#notes').value.trim()
   };
 }
 function updateSummary(){
   const on = keys.filter(k=>$('#'+k).checked).map(k=>labels[k]);
-  $('#summary').textContent = on.length ? `${on.length} selected: ${on.join(', ')}` : 'No symptoms selected — saves as a symptom-free day';
+  const meds = vals('medicines').length + ($('#medOtherChk').checked ? 1 : 0);
+  $('#summary').textContent = (on.length ? `${on.length} selected: ${on.join(', ')}` : 'No symptoms selected — saves as a symptom-free day')
+    + (meds ? ` · 💊 ${meds} medicine${meds>1?'s':''}` : '');
 }
 function showStatus(msg, kind, el='#status'){
   const s = $(el); s.hidden = false; s.className = 'status ' + (kind||''); s.textContent = msg;
@@ -327,6 +370,9 @@ function fill(e){
   const tick = (name, str)=>{ const list=(str||'').split(',').map(s=>s.trim());
     document.querySelectorAll(`input[name="${name}"]`).forEach(i=>i.checked = list.includes(i.value)); };
   tick('headacheType', e.headacheType); tick('stomachSymptoms', e.stomachSymptoms);
+  const meds = splitList(e.medicines), other = meds.filter(m => !MEDS.includes(m));
+  document.querySelectorAll('input[name="medicines"]').forEach(i=>i.checked = meds.includes(i.value));
+  $('#medOtherChk').checked = other.length > 0; $('#medOther').hidden = !other.length; $('#medOther').value = other.join(', ');
   $('#notes').value = e.notes || '';
   updateSummary();
 }
@@ -350,6 +396,7 @@ function renderLog(entries){
     const t = document.createElement('div'); t.className='tags';
     if (!tags.length){ const s=document.createElement('span'); s.className='tag none'; s.textContent='Symptom-free'; t.append(s); }
     tags.forEach(x=>{ const s=document.createElement('span'); s.className='tag'; s.textContent=x; t.append(s); });
+    if (e.medicines){ const s=document.createElement('span'); s.className='tag med-tag'; s.textContent='💊 ' + e.medicines; t.append(s); }
     row.append(d,t); log.append(row);
   });
 }
@@ -373,6 +420,7 @@ $('#save').addEventListener('click', async ()=>{
   const d = collect();
   if (d.headache && !d.headacheType.length) return showStatus('Pick the headache type: Migraine or Full head.', 'err');
   if (d.stomach && !d.stomachSymptoms.length) return showStatus('Pick at least one stomach symptom.', 'err');
+  if ($('#medOtherChk').checked && !$('#medOther').value.trim()){ $('#medOther').focus(); return showStatus('Write the other medicine name, or untick "Others".', 'err'); }
   if (notConfigured()) return showStatus('Add your Apps Script Web App URL in index.html first.', 'err');
 
   // Same day already saved → ask once before overwriting
@@ -492,6 +540,18 @@ function renderReport(){
   chart('cStomach', { type:'bar',
     data:{ labels:['Too many farts','Incomplete evac.','Vomit','Bloating'], datasets:[{ data:subCount('stomachSymptoms', STOM_TYPES), backgroundColor:css('--c2'), borderRadius:6 }] },
     options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{ x:{ beginAtZero:true, ticks:{precision:0}, title:{display:true,text:'Days'} }, y:{ grid:{display:false} } } }
+  });
+
+  // Medicines: days each was taken
+  const medDays = new Map();
+  rows.forEach(e => new Set(splitList(e.medicines)).forEach(m => medDays.set(m, (medDays.get(m)||0) + 1)));
+  const medList = [...medDays.entries()].sort((a,b)=>b[1]-a[1]);
+  $('#medChartBox').style.height = Math.max(160, 44 + medList.length*34) + 'px';
+  chart('cMed', { type:'bar',
+    data:{ labels: medList.length ? medList.map(x=>x[0]) : ['No medicine logged'], datasets:[{ data: medList.length ? medList.map(x=>x[1]) : [0], backgroundColor:css('--c4'), borderRadius:6 }] },
+    options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{ legend:{display:false},
+      tooltip:{ callbacks:{ label:c=>` ${c.raw} of ${rows.length} days` } } },
       scales:{ x:{ beginAtZero:true, ticks:{precision:0}, title:{display:true,text:'Days'} }, y:{ grid:{display:false} } } }
   });
 
