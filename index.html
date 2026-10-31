@@ -64,6 +64,13 @@ h1{font:700 1.75rem/1.15 var(--display);margin:0;letter-spacing:-.01em;text-wrap
   font-size:.92rem;cursor:pointer;background:var(--bg)}
 .chip input:checked+span{background:var(--accent-soft);border-color:var(--accent);color:var(--ink);font-weight:600}
 .chip input:focus-visible+span{outline:3px solid var(--accent-soft);outline-offset:2px}
+.head-subs{flex-direction:column;align-items:flex-start;gap:10px}
+.htype{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
+.sev{display:flex;flex-wrap:wrap;gap:8px;padding-left:14px;margin-left:12px;border-left:2px solid var(--line)}
+.sev .chip span{padding:6px 12px;font-size:.85rem}
+.sev [data-sev="Mild"] input:checked+span{background:color-mix(in srgb,var(--ok) 18%,transparent);border-color:var(--ok)}
+.sev [data-sev="Severe"] input:checked+span{background:color-mix(in srgb,var(--c4) 22%,transparent);border-color:var(--c4)}
+.sev [data-sev="Extreme"] input:checked+span{background:var(--warn);border-color:var(--warn);color:#fff}
 
 .med{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
 .med .subs{padding:0}
@@ -148,9 +155,23 @@ h2{font:600 1.1rem var(--display);margin:0}
       <div class="sym" data-key="headache">
         <label><input type="checkbox" class="main" id="headache">
           <div><div class="name">Headache</div><div class="hint">Pick the type below</div></div></label>
-        <div class="subs" hidden>
-          <label class="chip"><input type="checkbox" name="headacheType" value="Migraine"><span>Migraine</span></label>
-          <label class="chip"><input type="checkbox" name="headacheType" value="Full head"><span>Full head</span></label>
+        <div class="subs head-subs" hidden>
+          <div class="htype">
+            <label class="chip"><input type="checkbox" name="headacheType" value="Migraine"><span>Migraine</span></label>
+            <div class="sev" hidden>
+              <label class="chip" data-sev="Mild"><input type="radio" name="sevMigraine" value="Mild"><span>Mild</span></label>
+              <label class="chip" data-sev="Severe"><input type="radio" name="sevMigraine" value="Severe"><span>Severe</span></label>
+              <label class="chip" data-sev="Extreme"><input type="radio" name="sevMigraine" value="Extreme"><span>Extreme</span></label>
+            </div>
+          </div>
+          <div class="htype">
+            <label class="chip"><input type="checkbox" name="headacheType" value="Full head"><span>Full head</span></label>
+            <div class="sev" hidden>
+              <label class="chip" data-sev="Mild"><input type="radio" name="sevFullHead" value="Mild"><span>Mild</span></label>
+              <label class="chip" data-sev="Severe"><input type="radio" name="sevFullHead" value="Severe"><span>Severe</span></label>
+              <label class="chip" data-sev="Extreme"><input type="radio" name="sevFullHead" value="Extreme"><span>Extreme</span></label>
+            </div>
+          </div>
         </div>
       </div>
       <div class="sym" data-key="neck">
@@ -241,7 +262,7 @@ h2{font:600 1.1rem var(--display);margin:0}
 
     <div class="grid2">
       <div class="card">
-        <h2>Headache type</h2>
+        <h2>Headache type &amp; severity</h2>
         <div class="chartbox"><canvas id="cHead"></canvas></div>
       </div>
       <div class="card">
@@ -278,6 +299,9 @@ const $ = s => document.querySelector(s);
 const keys = ['headache','neck','stomach','back'];
 const labels = {headache:'Headache', neck:'Neck pain', stomach:'Stomach upset', back:'Low back pain'};
 const HEAD_TYPES = ['Migraine','Full head'];
+const SEVERITIES = ['Mild','Severe','Extreme'];
+// Headache is stored as "Migraine - Severe, Full head - Mild" (old entries: just "Migraine")
+const parseHead = str => splitList(str).map(s => { const [type, sev] = s.split(' - ').map(x=>x.trim()); return {type, sev: sev||''}; });
 const STOM_TYPES = ['Too many farts','Incomplete evacuation','Vomit','Bloating'];
 const MEDS = ['Nucoxia MR','Gabapentin','Dolo','Naxdom','Mobizox','Rifagut'];
 const splitList = str => (str||'').split(',').map(s=>s.trim()).filter(Boolean);
@@ -321,6 +345,18 @@ document.querySelectorAll('.sym').forEach(card=>{
   if (subs) subs.addEventListener('change', ()=>{ updateSummary(); disarm(); });
 });
 $('#notes').addEventListener('input', disarm);
+// Headache: picking a type opens its Mild / Severe / Extreme row
+document.querySelectorAll('.htype').forEach(h=>{
+  const t = h.querySelector('input[name="headacheType"]'), sev = h.querySelector('.sev');
+  t.addEventListener('change', ()=>{ sev.hidden = !t.checked; if (!t.checked) sev.querySelectorAll('input').forEach(i=>i.checked=false); });
+});
+$('#headache').addEventListener('change', ()=>{ if (!$('#headache').checked) document.querySelectorAll('.sev').forEach(s=>s.hidden=true); });
+function headSel(){
+  return [...document.querySelectorAll('.htype')].filter(h=>h.querySelector('input[name="headacheType"]').checked).map(h=>{
+    const s = h.querySelector('.sev input:checked');
+    return {type: h.querySelector('input[name="headacheType"]').value, sev: s ? s.value : ''};
+  });
+}
 // Medicines: "Others" shows a text box
 $('#medOtherChk').addEventListener('change', ()=>{
   const on = $('#medOtherChk').checked;
@@ -339,7 +375,7 @@ function medicinesList(){
 const vals = n => [...document.querySelectorAll(`input[name="${n}"]:checked`)].map(i=>i.value);
 function collect(){
   return {
-    headache: $('#headache').checked, headacheType: vals('headacheType'),
+    headache: $('#headache').checked, headacheType: headSel().map(h => h.sev ? `${h.type} - ${h.sev}` : h.type),
     neck: $('#neck').checked,
     stomach: $('#stomach').checked, stomachSymptoms: vals('stomachSymptoms'),
     back: $('#back').checked,
@@ -348,7 +384,11 @@ function collect(){
   };
 }
 function updateSummary(){
-  const on = keys.filter(k=>$('#'+k).checked).map(k=>labels[k]);
+  const on = keys.filter(k=>$('#'+k).checked).map(k=>{
+    if (k !== 'headache') return labels[k];
+    const hs = headSel().map(h => h.sev ? `${h.type} ${h.sev}` : h.type);
+    return hs.length ? `Headache (${hs.join(', ')})` : labels[k];
+  });
   const meds = vals('medicines').length + ($('#medOtherChk').checked ? 1 : 0);
   $('#summary').textContent = (on.length ? `${on.length} selected: ${on.join(', ')}` : 'No symptoms selected — saves as a symptom-free day')
     + (meds ? ` · 💊 ${meds} medicine${meds>1?'s':''}` : '');
@@ -369,7 +409,13 @@ function fill(e){
   set('headache', e.headache); set('neck', e.neck); set('stomach', e.stomach); set('back', e.back);
   const tick = (name, str)=>{ const list=(str||'').split(',').map(s=>s.trim());
     document.querySelectorAll(`input[name="${name}"]`).forEach(i=>i.checked = list.includes(i.value)); };
-  tick('headacheType', e.headacheType); tick('stomachSymptoms', e.stomachSymptoms);
+  const heads = parseHead(e.headacheType);
+  document.querySelectorAll('.htype').forEach(h=>{
+    const t = h.querySelector('input[name="headacheType"]'), found = heads.find(x=>x.type===t.value);
+    t.checked = !!found; h.querySelector('.sev').hidden = !found;
+    h.querySelectorAll('.sev input').forEach(i=>i.checked = !!found && i.value===found.sev);
+  });
+  tick('stomachSymptoms', e.stomachSymptoms);
   const meds = splitList(e.medicines), other = meds.filter(m => !MEDS.includes(m));
   document.querySelectorAll('input[name="medicines"]').forEach(i=>i.checked = meds.includes(i.value));
   $('#medOtherChk').checked = other.length > 0; $('#medOther').hidden = !other.length; $('#medOther').value = other.join(', ');
@@ -419,6 +465,8 @@ async function load(){
 $('#save').addEventListener('click', async ()=>{
   const d = collect();
   if (d.headache && !d.headacheType.length) return showStatus('Pick the headache type: Migraine or Full head.', 'err');
+  const noSev = headSel().find(h => !h.sev);
+  if (d.headache && noSev) return showStatus(`Pick how bad the ${noSev.type.toLowerCase()} headache was: Mild, Severe or Extreme.`, 'err');
   if (d.stomach && !d.stomachSymptoms.length) return showStatus('Pick at least one stomach symptom.', 'err');
   if ($('#medOtherChk').checked && !$('#medOther').value.trim()){ $('#medOther').focus(); return showStatus('Write the other medicine name, or untick "Others".', 'err'); }
   if (notConfigured()) return showStatus('Add your Apps Script Web App URL in index.html first.', 'err');
@@ -532,10 +580,15 @@ function renderReport(){
 
   // Sub-type breakdowns
   const subCount = (field, types) => types.map(t => rows.filter(e => (e[field]||'').split(',').map(s=>s.trim()).includes(t)).length);
+  // Headache: days per type, split by severity (older entries without severity = "Not recorded")
+  const headCount = (type, sev) => rows.filter(e => parseHead(e.headacheType).some(h => h.type===type && h.sev===sev)).length;
+  const sevColors = {Mild:css('--ok'), Severe:css('--c4'), Extreme:css('--warn'), '':css('--line')};
+  const headSets = [...SEVERITIES, ''].map(s => ({ label: s || 'Not recorded', data: HEAD_TYPES.map(t => headCount(t, s)),
+    backgroundColor: sevColors[s], stack:'h', borderRadius:4 })).filter(ds => ds.label !== 'Not recorded' || ds.data.some(v=>v>0));
   chart('cHead', { type:'bar',
-    data:{ labels:HEAD_TYPES, datasets:[{ data:subCount('headacheType', HEAD_TYPES), backgroundColor:css('--c1'), borderRadius:6 }] },
-    options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{legend:{display:false}},
-      scales:{ x:{ beginAtZero:true, ticks:{precision:0}, title:{display:true,text:'Days'} }, y:{ grid:{display:false} } } }
+    data:{ labels:HEAD_TYPES, datasets:headSets },
+    options:{ indexAxis:'y', maintainAspectRatio:false, plugins:{ legend:{ position:'bottom', labels:{ boxWidth:10 } } },
+      scales:{ x:{ stacked:true, beginAtZero:true, ticks:{precision:0}, title:{display:true,text:'Days'} }, y:{ stacked:true, grid:{display:false} } } }
   });
   chart('cStomach', { type:'bar',
     data:{ labels:['Too many farts','Incomplete evac.','Vomit','Bloating'], datasets:[{ data:subCount('stomachSymptoms', STOM_TYPES), backgroundColor:css('--c2'), borderRadius:6 }] },
